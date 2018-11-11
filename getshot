@@ -1,0 +1,25 @@
+#script to check if we have observations for a given RA/DEC, returns list of shots in the file shotlist.txt
+rad1=600
+ra=$2
+dec=$3
+rad=$4
+wave=$5
+
+mkdir $1
+cd $1
+
+awk '{if((3600.*sqrt((cos(dec0/57.3)*($3-ra0))^2+($4-dec0)^2))<rad0) print "/work/00115/gebhardt/maverick/getfib/rch",$1,$2,ra0,dec0,radp,wave0,wl0,name0}' ra0=$ra dec0=$dec rad0=$rad1 radp=$rad wave0=$wave wl0=$wl name0=$name /work/00115/gebhardt/maverick/getfib/radec.all > rj
+mv rj rj.all
+echo $name | sed s/v/" "/ | sed s/_/" "/ | awk '{print "grep \""$1,$2"\" rj.all"}' > rtmp ; chmod +x rtmp ; rtmp > rj
+chmod +x rj*
+rj.all > l1
+rm -f explist explist2
+awk '{s+=1; print 3600.*($1-rap),3600.*($2-decp),s}' rap=$ra decp=$dec l1 > loffset
+awk '{print $10,$11,$5,$9,$8}' l1 | sed s/v/" "/ | sed s/_/" "/g | sed s/.ixy// > l2
+awk '{print "/work/03946/hetdex/maverick/red1/reductions/"$1"/virus/virus0000"$2}' l2 > l3
+
+awk '{print $10"v"$11}' l1 | uniq > shotlist.txt
+
+
+
+

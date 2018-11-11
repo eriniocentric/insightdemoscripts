@@ -1,0 +1,92 @@
+# Updated to latest rsp scripts and now automatically produces elixer output and matched catalogs
+#updated 08/11/2018 EMC
+#
+#makelinecat takes an input catalog as an argument 
+#[arg1]=input catalog should be in the form of ID RA(deg) DEC(deg) WAVE(AA)  
+#[arg2]=aperture radius (arcsec), DEFAULT: 3 arcsec
+#[arg3]=wavelength region to search and fit line. DEFAULT 50AA
+
+#argument checking:
+
+if [ ! -e $1 ]; then
+   echo "Input file does not exist or is not given. Exiting script."
+   exit 1
+fi
+
+if [ $2 ]; then
+   radius=$2
+else
+   echo "Using default aperture radius of 3"
+   radius=3
+fi
+
+if [ $3 ]; then
+   dwave=$3
+else
+   echo "Using default delta wave: 50 AA"
+   dwave=50
+fi   
+
+filename="$1"
+
+if [ -e getshotcall ]; then rm getshotcall*; fi
+
+while IFS=" "  read -r id ra dec wave extra
+do
+	case $id in
+	     ''|\#*) continue ;;         # skip blank lines and lines starting with #
+   	esac
+
+	echo "$id $ra $dec $wave"
+	
+	#check to see if any data exists and collect shots into shotlist.txt file
+
+	echo "~ecooper/bin/getshot $id $ra $dec $radius $wave" >> getshotcall
+
+done < $filename
+
+~ecooper/bin/test/jobsplitter getshotcall
+ls getshotcall_*.slurm > rbatch1
+sed -i s/^/"sbatch "/ rbatch1
+chmod a+x rbatch1
+rbatch1; sleep 90
+
+rm getshotcall_*
+
+if [ -e rspcall ]; then rm rspcall*; fi
+
+while IFS=" "  read -r id ra dec wave extra
+do
+	echo "$id $ra $dec $wave"
+
+	if [ -s $id/shotlist.txt ]; then 
+	     		
+		while IFS=" " read -r shot
+		do 	
+			echo "rsp3 $ra $dec $radius $wave $dwave $id $shot 1.7 3" >> rspcall
+		done < $id/shotlist.txt
+	fi
+done < $filename
+
+~ecooper/bin/test/jobsplitter rspcall
+ls rspcall_*.slurm > rbatch2
+sed -i s/^/"sbatch "/ rbatch2
+chmod a+x rbatch2
+rbatch2; sleep 90
+#rm rspcall_*
+
+#create a .dets file to create the elixer call and produce the final catalog, pick files with SN>5 in the .res file for now
+
+grep . 2*/*2d.res | sed s/'\/'/' '/ | awk '{if($5>4.99) print $1}' |  sed s/"_2d.res:"// > list.dets
+
+workdir=$(pwd)
+
+awk -v workdir=$workdir '{printf "python /work/03261/polonius/maverick/science/sciscripts/elixer.test/elixer.py --tasks 0 --fcsdir %s --name %s --dets %s_%s --error 2.5 --time 00:10:00 -f \n", workdir,$8,$8,$7}' rspcall > elixcall
+
+
+#selixer.test --tasks 0 --fcsdir $workdir --dets list.dets --name elixer --error 2.5 --time "00:10:00"
+#
+#echo '#!/bin/sh' > cleanup
+#echo "cd elixer; elixer --merge; cp elixer*.txt ../ ; mv elixer/dispatch*/elixer/*.pdf . ; rm -rf dispatch*" >> cleanup
+#
+#sbatch -p vis -n 1 -N 1 -t '00:05:00' --dependency=singleton cleanup

@@ -1,0 +1,44 @@
+id=$1
+ra=$2
+dec=$3
+wv=$4
+rad=57.296
+ra_sep=6.0
+dec_sep=6.0
+wv_sep=10.0
+cdir='/work/05178/cxliu/maverick/detect/test/catalog/'
+filename=result_$id
+filename2=outputcat$id
+filename3=alines$id
+
+rm $filename
+rm $filename2
+rm $filename3
+
+echo "****************************************************************************" > $filename
+echo ${id} ${ra} ${dec} ${wv} >> $filename
+
+# run62, chi2=1.8
+echo "----------------------------------------------------------------------------" >> $filename
+awk '{print 3600.*(ra0-$2)*cos(dec0/rad0), 3600. * (dec0-$3), wv0-$4,$0}' ra0=$ra dec0=$dec wv0=$wv rad0=$rad ${cdir}cat.all > cat.${id}
+awk '{if( sqrt(($1)^2)<ra_sep0 && sqrt(($2)^2)<dec_sep0 && sqrt(($3)^2)<wv_sep0 ) print objectid, $0 }' objectid=$id ra_sep0=$ra_sep dec_sep0=$dec_sep wv_sep0=$wv_sep cat.${id} > match62.${id}
+rm cat.${id}
+echo "cat.0 (run62) hit it for" `wc match62.${id} | awk '{print$1}'` "times, they are:" >> $filename
+echo "#objectID delta_ra delta_dec delta_wv DETECTID RA DEC wave S/N chi2 flux sigma cont nshot(cat.0) nshot(alines) nshot(obs) fwhm(guider)" >> $filename
+cat match62.${id} >> $filename
+cat match62.${id} >> $filename2
+rm match62.${id}
+
+
+# run61
+echo "----------------------------------------------------------------------------" >> $filename
+awk '{print 3600.*(ra0-$2)*cos(dec0/rad0), 3600. * (dec0-$3), wv0-$4,$0}' ra0=$ra dec0=$dec wv0=$wv rad0=$rad ${cdir}alines.all > alines.${id}
+awk '{if( sqrt(($1)^2)<ra_sep0 && sqrt(($2)^2)<dec_sep0 && sqrt(($3)^2)<wv_sep0 ) print $0 }' ra_sep0=$ra_sep dec_sep0=$dec_sep wv_sep0=$wv_sep alines.${id} > malines.${id}
+rm alines.${id}
+nl=`awk '{print$4}' malines.${id} | uniq | wc | awk '{print$1}'`
+echo "alines (run61) hit it in" $nl "shots for" `wc malines.${id} | awk '{print$1}'` "times" >> $filename
+awk '{print$4}' malines.${id} | uniq >> $filename
+echo "#delta_ra delta_dec delta_wv shot RA DEC wavelength sn chi2 flux sigma cont" >> $filename
+cat malines.${id} >> $filename
+cat malines.${id} > $filename3
+rm malines.${id}
